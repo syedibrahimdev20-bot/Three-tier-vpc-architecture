@@ -1,65 +1,62 @@
 # Three-Tier AWS VPC Architecture
 
-A hands-on AWS networking project to design and configure a segmented Virtual Private Cloud (VPC) for a three-tier application across two Availability Zones.
+A hands-on **AWS networking project** demonstrating a segmented Virtual Private Cloud (VPC) design for a three-tier application across two Availability Zones.
 
 > **Project type:** AWS networking / cloud infrastructure  
 > **Tools:** AWS Management Console  
-> **Infrastructure as Code:** Not used (this project was built using AWS services directly)
+> **Infrastructure as Code:** Not used — this project was configured using AWS services directly.
 
 ## Project Overview
 
-This project demonstrates how to build a VPC network that separates the application into public, application, and database tiers. The design uses two Availability Zones to support a highly available architecture and applies network segmentation to control access between tiers.
+This project separates a three-tier application network into public, private application, and private database subnets. The design uses two Availability Zones to demonstrate network segmentation and a highly available architecture.
 
-The AWS VPC console screenshot shows a VPC named **Three-Tier-VPC**, six subnets, four route tables, and two network connections. The architecture diagram represents the intended three-tier design with an Internet Gateway, Application Load Balancer, EC2 application instances, NAT Gateway, and RDS database tier.
+The AWS console screenshot shows a VPC named **Three-Tier-VPC**, with **six subnets**, **four route tables**, and **two network connections**. The architecture diagram illustrates the intended design with an Internet Gateway, Application Load Balancer (ALB), EC2 application instances, NAT Gateway, and an Amazon RDS database tier.
 
 ## Architecture
 
 ### Network layout
 
-- **VPC CIDR:** `10.20.0.0/16`
-- **Availability Zones:** 2
-- **Subnets:** 6 total (public, private application, and private database subnets across the two AZs)
+- **VPC name in console:** `Three-Tier-VPC`
+- **VPC CIDR shown in console:** `10.10.0.0/16`
+- **Availability Zones:** 2 (us-east-1a and us-east-1b)
+- **Subnets:** 6 total — 2 public, 2 private application, and 2 private database subnets
 - **Route tables:** 4
-- **Network connections:** Internet Gateway and NAT Gateway are shown in the project design
+- **Network connections:** 2 shown in the AWS console
 
-### Traffic flow
+### Three-tier architecture and traffic direction
 
-```text
-Internet
-   |
-   v
-Internet Gateway
-   |
-   v
-Public Subnets (AZ-1 and AZ-2)
-   |
-   v
-Application Load Balancer
-   |
-   v
-Private Application Subnets
-   |
-   v
-EC2 Application Instances
-   |
-   v
-Private Database Subnets
-   |
-   v
-RDS Database
-```
-
-**Outbound access from private application instances:**
+The diagram below uses `>` to show the direction of traffic:
 
 ```text
-Private Application Subnet --> NAT Gateway --> Internet Gateway --> Internet
+                              Internet
+                                 |
+                                 v
+                         Internet Gateway
+                                 |
+                   +-------------+-------------+
+                   |                           |
+             Public Subnet AZ-1          Public Subnet AZ-2
+                   |                           |
+                  ALB                         ALB
+                   |                           |
+                   v                           v
+          Private App Subnet AZ-1    Private App Subnet AZ-2
+                   |                           |
+             EC2 App Tier  <------->     EC2 App Tier
+                   |                           |
+                   v                           v
+          Private DB Subnet AZ-1     Private DB Subnet AZ-2
+                   |                           |
+                RDS DB                      RDS DB
 ```
 
-The arrows (`-->`) show the intended traffic direction. A NAT Gateway allows resources in private subnets to initiate outbound connections; it does not provide unsolicited inbound access from the internet.
+**Traffic flow:** Internet `>` Internet Gateway `>` public subnet / ALB `>` private application tier `>` private database tier.
 
-## Subnet Plan
+**Private outbound flow (when configured):** Private application subnet `>` NAT Gateway `>` Internet Gateway `>` Internet. A NAT Gateway allows private resources to initiate outbound connections; it does not allow unsolicited inbound connections from the internet.
 
-The following CIDR plan is shown in the architecture diagram:
+### Subnet plan shown in the architecture diagram
+
+The conceptual architecture image uses the following CIDR plan:
 
 | Tier | Availability Zone 1 | Availability Zone 2 |
 |---|---|---|
@@ -67,53 +64,58 @@ The following CIDR plan is shown in the architecture diagram:
 | Private Application | `10.20.11.0/24` | `10.20.12.0/24` |
 | Private Database | `10.20.21.0/24` | `10.20.22.0/24` |
 
-## AWS Services
+**CIDR clarification:** The AWS console screenshot shows the actual VPC as `10.10.0.0/16`, while the conceptual diagram labels its example VPC as `10.20.0.0/16`. These are different address plans. Confirm the subnet CIDRs in the AWS console and update this table if the conceptual CIDRs were not used in your deployed VPC.
 
-- **Amazon VPC** – isolated virtual network
-- **Subnets** – separate public, application, and database tiers
-- **Internet Gateway (IGW)** – internet connectivity for public subnet routes
-- **NAT Gateway** – outbound internet access for private application resources
-- **Route Tables** – route traffic between subnet tiers and network gateways
-- **Security Groups** – control inbound and outbound traffic
-- **Application Load Balancer (ALB)** – distributes application traffic across application instances
-- **Amazon EC2** – application tier compute instances
-- **Amazon RDS** – database tier shown in the architecture design
+## AWS Services and Components
+
+- **Amazon VPC** — isolated virtual network for AWS resources
+- **Subnets** — separate public, application, and database tiers
+- **Internet Gateway (IGW)** — internet connectivity for public subnet routes
+- **Route Tables** — control traffic routing and subnet associations
+- **NAT Gateway** — outbound internet access for private resources, when configured
+- **Security Groups** — control inbound and outbound traffic at the resource level
+- **Application Load Balancer (ALB)** — distributes incoming application traffic across targets
+- **Amazon EC2** — compute instances for the application tier
+- **Amazon RDS** — managed database service shown in the architecture design
 
 ## Security Design
 
-- Keep application and database resources in private subnets.
-- Allow public web traffic only through the Application Load Balancer.
-- Restrict application instance inbound traffic to the ALB security group.
-- Allow database access only from the application tier security group and required database port.
-- Avoid opening SSH (port 22) to the entire internet; use a trusted IP or a managed access method.
-- Use least-privilege security group rules and IAM permissions.
+- Keep application and database workloads in private subnets.
+- Route public web traffic through the ALB rather than directly to application instances.
+- Allow application instance inbound traffic only from the ALB security group, on the required application port.
+- Allow database traffic only from the application tier security group and required database port.
+- Avoid opening SSH (port 22) to `0.0.0.0/0`; restrict administrative access to a trusted source or managed access method.
+- Follow least-privilege principles for security groups and IAM permissions.
 
 ## What I Practiced
 
 - Creating and organizing a VPC and subnets across Availability Zones
 - Planning CIDR blocks and subnet segmentation
-- Working with route tables and gateway connections
+- Working with route tables and subnet associations
 - Understanding public and private subnet routing
-- Applying security groups for tier-based access control
-- Designing a highly available three-tier AWS network
+- Reviewing gateway connections and network paths
+- Designing a three-tier AWS network with controlled tier-to-tier access
+- Applying high-availability principles across two Availability Zones
 
 ## Validation Checklist
 
-Before considering the architecture complete, verify in the AWS console:
+Use this checklist to verify the configuration in the AWS console:
 
-- [ ] VPC and all six subnets are created with the intended CIDR blocks.
+- [ ] VPC and all six subnets exist with the intended CIDR blocks.
 - [ ] Public subnet route tables have a route to the Internet Gateway.
-- [ ] Private application subnet routes use the NAT Gateway for outbound internet access, if required.
-- [ ] Database subnets do not have direct internet routes.
-- [ ] Security groups allow only the required tier-to-tier traffic.
-- [ ] ALB targets are healthy and application instances are reachable through the ALB.
-- [ ] Database connectivity is limited to the application tier.
+- [ ] Private application subnet routes use a NAT Gateway for outbound internet access, if required.
+- [ ] Database subnets do not have direct routes to the internet.
+- [ ] Security groups allow only required traffic between tiers.
+- [ ] ALB targets are healthy and the application is reachable through the ALB, if deployed.
+- [ ] Database connectivity is limited to the application tier, if RDS is deployed.
 
 ## Important Notes
 
-This repository documents an AWS console-based networking project. **Terraform and other Infrastructure as Code tools were not used for this project.**
+This is an **AWS console-based networking project**. **Terraform, CloudFormation, and other Infrastructure as Code tools were not used.**
 
-The architecture image is a design/reference diagram. Confirm that ALB, EC2, NAT Gateway, and RDS resources are actually deployed and tested in your AWS account before describing them as completed production resources. AWS resources may incur charges; remove resources that are no longer needed.
+The architecture image is a design/reference diagram. The console screenshot documents the VPC and network configuration visible in the AWS account. Only list ALB, EC2, NAT Gateway, and RDS as deployed resources if you have actually created and tested them.
+
+AWS resources may incur charges. Review billable resources and delete unused resources after practice.
 
 ## Author
 
